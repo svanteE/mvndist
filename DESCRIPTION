@@ -1,0 +1,26 @@
+Package: mvndist
+Type: Package
+Title: Distance Measures Between Multivariate Normal Distributions
+Version: 0.1.0
+Authors@R: person("Svante", "Eriksen", email = "svante@math.aau.dk", 
+                  role = c("aut", "cre"))
+Description: Implements various distance and divergence measures between 
+    multivariate normal distributions, including Fisher-Rao (numerical), 
+    Wasserstein-2 (Bures), Hellinger, Bhattacharyya, affine-invariant, and 
+    Kullback-Leibler distances. Provides geodesic computation on the manifold 
+    of multivariate normal distributions using different Riemannian metrics.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.2
+Depends: 
+    R (>= 3.5.0)
+Imports:
+    expm,
+    deSolve,
+    MASS
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
