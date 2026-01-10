@@ -73,6 +73,26 @@ objective_f <- function(y, d, D) {
   sum(C^2)
 }
 
+#' Helper: Gradient of objective function (optional, for speed)
+#' @noRd
+gradient_f <- function(y, d, D) {
+  # Numerical gradient via finite differences
+  p <- length(d)
+  n_y <- length(y)
+  grad <- numeric(n_y)
+  h <- 1e-8
+  
+  f0 <- objective_f(y, d, D)
+  
+  for (i in 1:n_y) {
+    y_plus <- y
+    y_plus[i] <- y[i] + h
+    grad[i] <- (objective_f(y_plus, d, D) - f0) / h
+  }
+  
+  grad
+}
+
 #' Fisher-Rao Geodesic (Optimized)
 #'
 #' Computes the Fisher-Rao geodesic between two multivariate normal distributions
@@ -198,16 +218,34 @@ fisher_rao_distance <- function(mu1, Sigma1, mu2, Sigma2,
   
   # Optimize y (upper triangular part of Z)
   n_y <- p*(p-1)/2
-  y0 <- rep(0, n_y)
   
-  result <- optim(
-    par = y0,
-    fn = objective_f,
-    d = d,
-    D = D,
-    method = method,
-    control = control
-  )
+  # Better initial guess: use small random perturbations
+  # This helps escape poor local minima
+  y0 <- rnorm(n_y, mean = 0, sd = 0.01)
+  
+  # Try optimization with multiple restarts if it doesn't converge
+  best_result <- list(value = Inf)
+  
+  for (attempt in 1:3) {
+    result <- optim(
+      par = if(attempt == 1) y0 else rnorm(n_y, sd = 0.05),
+      fn = objective_f,
+      gr = gradient_f,  # Use gradient for faster convergence
+      d = d,
+      D = D,
+      method = method,
+      control = control
+    )
+    
+    if (result$value < best_result$value) {
+      best_result <- result
+    }
+    
+    # Break early if converged well
+    if (result$value < 1e-6) break
+  }
+  
+  result <- best_result
   
   # Compute distance from optimized T matrix
   T_mat <- construct_T(result$par, d, D)
