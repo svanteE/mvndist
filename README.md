@@ -19,10 +19,10 @@ Both measure "distance" between distributions, but they capture different concep
 
 ### Fisher-Rao Distance (Information Geometry)
 - **What it measures**: Geodesic distance on the statistical manifold
-- **Computation**: Requires optimization (solving f(y) = tr(C(y)²) = 0)
+- **Computation**: Uses Eriksen (1987) method solving the geodesic equations
 - **Speed**: Slower, especially for high dimensions
 - **When to use**: Theoretical statistical work, information-theoretic analysis
-- **Implementation**: Uses the exact optimization method from Skovgaard (1984)
+- **Implementation**: Optimization of f(y) = tr(C(y)²) = 0 from Eriksen (1987)
 
 ### Wasserstein-2 Distance (Optimal Transport)
 - **What it measures**: Cost of optimally transporting probability mass
@@ -48,7 +48,7 @@ install.packages("path/to/mvndist", repos = NULL, type = "source")
 devtools::install_local("path/to/mvndist")
 ```
 
-Note: The package no longer requires `deSolve` - Fisher-Rao distance now uses an optimized method based on Skovgaard (1984).
+Note: The package no longer requires `deSolve` - Fisher-Rao distance now uses the optimized Eriksen (1987) method based on Skovgaard's (1984) Riemannian geometry framework.
 
 ## Quick Start
 

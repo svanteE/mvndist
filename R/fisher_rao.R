@@ -96,11 +96,11 @@ gradient_f <- function(y, d, D) {
 #' Fisher-Rao Geodesic (Optimized)
 #'
 #' Computes the Fisher-Rao geodesic path between two multivariate normal distributions
-#' by solving the optimization problem described in the paper. This method finds
-#' the exact geodesic by minimizing f(y) = tr(C(y)^2) where C(y) is the off-diagonal
-#' block in the matrix logarithm decomposition. Once the optimal y is found, it constructs
-#' A(y) and computes Λ(t) = exp(t·A) to extract Δ(t) and δ(t), which give the geodesic
-#' path μ(t) and Σ(t).
+#' using the method of Eriksen (1987), which solves the geodesic equations for the
+#' Fisher information metric formulated by Skovgaard (1984). The method minimizes
+#' f(y) = tr(C(y)^2) where C(y) is the off-diagonal block in the matrix logarithm
+#' decomposition. Once optimal y is found, it constructs A(y) and computes Λ(t) = exp(t·A)
+#' to extract the geodesic path μ(t) and Σ(t).
 #'
 #' @param mu1 Mean vector of the first distribution
 #' @param Sigma1 Covariance matrix of the first distribution
@@ -117,9 +117,11 @@ gradient_f <- function(y, d, D) {
 #' @references
 #' Skovgaard, L. T. (1984). A Riemannian geometry of the multivariate
 #' normal model. Scandinavian Journal of Statistics, 11(4), 211-223.
+#' (Established the Riemannian geometry framework and differential equations)
 #'
 #' Eriksen, P. S. (1987). Geodesics connected with the Fisher metric on
 #' the multivariate normal manifold. Proceedings of the GST Workshop.
+#' (Solved the geodesic equations, enabling practical computation)
 #'
 #' @importFrom expm logm expm
 #' @export
@@ -268,10 +270,10 @@ fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2,
 
 #' Fisher-Rao Distance (Optimized)
 #'
-#' Computes the Fisher-Rao distance by optimizing the geodesic equation.
-#' This method solves the optimization problem f(y) = tr(C(y)^2) = 0 to find
-#' the exact geodesic, then computes the distance as the path length.
-#' For univariate distributions, uses the exact closed-form solution.
+#' Computes the Fisher-Rao distance using the geodesic solution method of Eriksen (1987).
+#' This method solves the optimization problem f(y) = tr(C(y)^2) = 0 to find the exact
+#' geodesic for the Fisher information metric (Skovgaard 1984), then computes the distance
+#' as the path length. For univariate distributions, uses the exact closed-form solution.
 #'
 #' @param mu1 Mean vector of the first distribution
 #' @param Sigma1 Covariance matrix of the first distribution
