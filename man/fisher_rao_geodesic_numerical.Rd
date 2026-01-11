@@ -33,10 +33,12 @@ A list of length n_steps, each element containing:
   \item{Sigma}{Covariance matrix at this point}
 }
 \description{
-Computes the Fisher-Rao geodesic between two multivariate normal distributions
+Computes the Fisher-Rao geodesic path between two multivariate normal distributions
 by solving the optimization problem described in the paper. This method finds
 the exact geodesic by minimizing f(y) = tr(C(y)^2) where C(y) is the off-diagonal
-block in the matrix logarithm decomposition.
+block in the matrix logarithm decomposition. Once the optimal y is found, it constructs
+A(y) and computes Λ(t) = exp(t·A) to extract Δ(t) and δ(t), which give the geodesic
+path μ(t) and Σ(t).
 }
 \references{
 Skovgaard, L. T. (1984). A Riemannian geometry of the multivariate

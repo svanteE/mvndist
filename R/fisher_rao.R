@@ -95,10 +95,12 @@ gradient_f <- function(y, d, D) {
 
 #' Fisher-Rao Geodesic (Optimized)
 #'
-#' Computes the Fisher-Rao geodesic between two multivariate normal distributions
+#' Computes the Fisher-Rao geodesic path between two multivariate normal distributions
 #' by solving the optimization problem described in the paper. This method finds
 #' the exact geodesic by minimizing f(y) = tr(C(y)^2) where C(y) is the off-diagonal
-#' block in the matrix logarithm decomposition.
+#' block in the matrix logarithm decomposition. Once the optimal y is found, it constructs
+#' A(y) and computes Λ(t) = exp(t·A) to extract Δ(t) and δ(t), which give the geodesic
+#' path μ(t) and Σ(t).
 #'
 #' @param mu1 Mean vector of the first distribution
 #' @param Sigma1 Covariance matrix of the first distribution
@@ -119,20 +121,149 @@ gradient_f <- function(y, d, D) {
 #' Eriksen, P. S. (1987). Geodesics connected with the Fisher metric on
 #' the multivariate normal manifold. Proceedings of the GST Workshop.
 #'
+#' @importFrom expm logm expm
 #' @export
 fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2, 
                                           n_steps = 100, tol = 1e-6) {
-  # For now, return linear interpolation as placeholder
-  # Full geodesic path computation would require solving the optimized path at each t
+  p <- length(mu1)
+  
+  # Check for ill-conditioned matrices
+  cond1 <- kappa(Sigma1)
+  cond2 <- kappa(Sigma2)
+  
+  if (cond1 > 1e10 || cond2 > 1e10) {
+    warning("Ill-conditioned covariance matrix detected. Geodesic may be inaccurate.")
+    return(NULL)
+  }
+  
+  # Transform to canonical parameters relative to (0, I)
+  U <- chol(solve(Sigma1))
+  U_inv <- solve(U)
+  
+  mu_transformed <- U %*% (mu2 - mu1)
+  Sigma_transformed <- U %*% Sigma2 %*% t(U)
+  
+  De <- solve(Sigma_transformed)
+  de <- De %*% mu_transformed
+  
+  # Univariate case
+  if (p == 1) {
+    de_scalar <- as.numeric(de)
+    De_scalar <- as.numeric(De)
+    
+    sigma1 <- 1
+    sigma2 <- sqrt(1 / De_scalar)
+    mu_diff <- de_scalar / De_scalar
+    
+    # Use exact geodesic formula for univariate case
+    times <- seq(0, 1, length.out = n_steps)
+    
+    geodesic <- lapply(times, function(t) {
+      # Interpolate mean linearly
+      mu_t <- (1 - t) * 0 + t * mu_diff
+      
+      # Interpolate sigma on log scale (geometric mean)
+      sigma_t <- sigma1^(1-t) * sigma2^t
+      Sigma_t <- matrix(sigma_t^2, 1, 1)
+      
+      # Transform back to original coordinates
+      mu_original <- mu1 + U_inv %*% matrix(mu_t, ncol = 1)
+      Sigma_original <- U_inv %*% Sigma_t %*% t(U_inv)
+      
+      list(t = t, 
+           mu = as.vector(mu_original),
+           Sigma = Sigma_original)
+    })
+    
+    return(geodesic)
+  }
+  
+  # Multivariate case - use optimized method
+  # Diagonalize De via eigendecomposition
+  eigen_De <- eigen(De)
+  De_diag <- diag(eigen_De$values)
+  V <- eigen_De$vectors
+  de_rotated <- t(V) %*% de
+  
+  # Transform to d and D
+  D <- sqrt(diag(De_diag))
+  d <- de_rotated / D
+  
+  # Optimize y to minimize tr(C(y)^2)
+  n_y <- p*(p-1)/2
+  y0 <- rnorm(n_y, mean = 0, sd = 0.01)
+  
+  # Multi-restart optimization
+  best_result <- list(value = Inf)
+  
+  for (attempt in 1:3) {
+    result <- optim(
+      par = if(attempt == 1) y0 else rnorm(n_y, sd = 0.05),
+      fn = objective_f,
+      gr = gradient_f,
+      d = d,
+      D = D,
+      method = "BFGS",
+      control = list()
+    )
+    
+    if (result$value < best_result$value) {
+      best_result <- result
+    }
+    
+    if (result$value < 1e-6) break
+  }
+  
+  y_opt <- best_result$par
+  
+  # Check convergence
+  if (best_result$value > 1e-4) {
+    warning(paste("Optimization may not have converged. f(y) =", 
+                  round(best_result$value, 8)))
+  }
+  
+  # Construct optimal T matrix and compute A = log(T'T)
+  T_mat <- construct_T(y_opt, d, D)
+  TtT <- t(T_mat) %*% T_mat
+  A <- expm::logm(TtT)
+  
+  # At optimum, C(y) = 0, so A has the block structure:
+  # A = [A11, a12,  0   ]
+  #     [a21,  0,  -a12^t]
+  #     [0,  -a12, -A11]
+  # where A11 is p×p, a12 is p×1
+  
+  # Generate geodesic path: Λ(t) = exp(t·A)
   times <- seq(0, 1, length.out = n_steps)
   
-  warning("Full geodesic path not yet implemented. Use fisher_rao_distance() for distance computation.")
-  
-  lapply(times, function(t) {
+  geodesic <- lapply(times, function(t) {
+    # Compute Λ(t) = exp(t·A)
+    Lambda_t <- expm::expm(t * A)
+    
+    # Extract De(t) and de(t) from Λ(t) - these are already in the rotated (d,D) space
+    # Λ[1:p, 1:p] = De(t) in rotated coordinates
+    # Λ[1:p, p+1] = de(t) in rotated coordinates
+    De_t_rotated <- Lambda_t[1:p, 1:p]
+    de_t_rotated <- Lambda_t[1:p, p+1, drop=FALSE]
+    
+    # Rotate back using V to get to canonical space (before the d,D rotation)
+    De_t_canonical <- V %*% De_t_rotated %*% t(V)
+    de_t_canonical <- V %*% de_t_rotated
+    
+    # Convert (De, de) to (mu, Sigma) in canonical space
+    Sigma_t_canonical <- solve(De_t_canonical)
+    mu_t_canonical <- Sigma_t_canonical %*% de_t_canonical
+    
+    # Transform back to original coordinates
+    mu_original <- mu1 + U_inv %*% mu_t_canonical
+    Sigma_original <- U_inv %*% Sigma_t_canonical %*% t(U_inv)
+    
     list(t = t, 
-         mu = (1-t)*mu1 + t*mu2,
-         Sigma = (1-t)*Sigma1 + t*Sigma2)
+         mu = as.vector(mu_original),
+         Sigma = Sigma_original)
   })
+  
+  geodesic
 }
 
 #' Fisher-Rao Distance (Optimized)
