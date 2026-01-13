@@ -24,6 +24,11 @@
 #'
 #' @export
 wasserstein2_distance <- function(mu1, Sigma1, mu2, Sigma2) {
+  # Check for identical distributions (avoid numerical precision issues)
+  if (isTRUE(all.equal(mu1, mu2)) && isTRUE(all.equal(Sigma1, Sigma2))) {
+    return(0)
+  }
+
   # Mean part
   mu_dist_sq <- sum((mu1 - mu2)^2)
   

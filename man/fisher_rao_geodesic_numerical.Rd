@@ -34,16 +34,21 @@ A list of length n_steps, each element containing:
 }
 \description{
 Computes the Fisher-Rao geodesic path between two multivariate normal distributions
-by solving the optimization problem described in the paper. This method finds
-the exact geodesic by minimizing f(y) = tr(C(y)^2) where C(y) is the off-diagonal
-block in the matrix logarithm decomposition. Once the optimal y is found, it constructs
-A(y) and computes Λ(t) = exp(t·A) to extract Δ(t) and δ(t), which give the geodesic
-path μ(t) and Σ(t).
+using the method of Eriksen (1987), which solves the geodesic equations for the
+Fisher information metric formulated by Skovgaard (1984). The method minimizes
+f(y) = tr(C(y)^2) where C(y) is the off-diagonal block in the matrix logarithm
+decomposition. Once optimal y is found, it constructs A(y) and computes Λ(t) = exp(t·A)
+to extract the geodesic path μ(t) and Σ(t).
 }
 \references{
 Skovgaard, L. T. (1984). A Riemannian geometry of the multivariate
 normal model. Scandinavian Journal of Statistics, 11(4), 211-223.
+(Established the Riemannian geometry framework and differential equations)
 
 Eriksen, P. S. (1987). Geodesics connected with the Fisher metric on
 the multivariate normal manifold. Proceedings of the GST Workshop.
+(Solved the geodesic equations, enabling practical computation)
+
+For detailed theory and implementation, see the included paper:
+\code{system.file("fisher_rao_geodesic.pdf", package = "mvndist")}
 }

@@ -30,10 +30,10 @@ fisher_rao_distance(
 The Fisher-Rao distance (non-negative scalar), or NA if computation fails
 }
 \description{
-Computes the Fisher-Rao distance by optimizing the geodesic equation.
-This method solves the optimization problem f(y) = tr(C(y)^2) = 0 to find
-the exact geodesic, then computes the distance as the path length.
-For univariate distributions, uses the exact closed-form solution.
+Computes the Fisher-Rao distance using the geodesic solution method of Eriksen (1987).
+This method solves the optimization problem f(y) = tr(C(y)^2) = 0 to find the exact
+geodesic for the Fisher information metric (Skovgaard 1984), then computes the distance
+as the path length. For univariate distributions, uses the exact closed-form solution.
 }
 \examples{
 # Bivariate example
@@ -48,4 +48,14 @@ print(d)
 d_uni <- fisher_rao_distance(0, matrix(1), 2, matrix(4))
 print(d_uni)
 
+}
+\references{
+Skovgaard, L. T. (1984). A Riemannian geometry of the multivariate
+normal model. Scandinavian Journal of Statistics, 11(4), 211-223.
+
+Eriksen, P. S. (1987). Geodesics connected with the Fisher metric on
+the multivariate normal manifold. Proceedings of the GST Workshop.
+
+For detailed theory and implementation, see the included paper:
+\code{system.file("fisher_rao_geodesic.pdf", package = "mvndist")}
 }

@@ -1,0 +1,18 @@
+wasserstein2_distance <- function(mu1, Sigma1, mu2, Sigma2) {
+  # Check for identical distributions (avoid numerical precision issues)
+  if (isTRUE(all.equal(mu1, mu2)) && isTRUE(all.equal(Sigma1, Sigma2))) {
+    return(0)
+  }
+  
+  # Mean part
+  mu_dist_sq <- sum((mu1 - mu2)^2)
+  
+  # Covariance part (Bures metric)
+  Sigma1_sqrt <- expm::sqrtm(Sigma1)
+  M <- Sigma1_sqrt %*% Sigma2 %*% Sigma1_sqrt
+  M_sqrt <- expm::sqrtm(M)
+  
+  Sigma_dist_sq <- sum(diag(Sigma1)) + sum(diag(Sigma2)) - 2 * sum(diag(M_sqrt))
+  
+  sqrt(mu_dist_sq + Sigma_dist_sq)
+}

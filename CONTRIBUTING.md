@@ -53,6 +53,14 @@ Feature requests are welcome! Please open an issue describing:
 - Update README.md if adding major features
 - Add entries to NEWS.md
 
+## Release communication (R-bloggers)
+
+- For any CRAN release or major feature, draft a short blog post summarizing what changed.
+- Include 3-5 bullet highlights, installation instructions, and one minimal runnable example.
+- Publish the post on a blog feed registered with R-bloggers; if the feed is not registered yet, submit it once via the R-bloggers site.
+- Link back to the package repo, NEWS.md, and (if available) the pkgdown site; note the package version and release date.
+- Update or append the post if follow-up fixes significantly change usage or behavior.
+
 ## Questions?
 
 Feel free to open an issue for questions about contributing!

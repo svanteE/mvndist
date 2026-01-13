@@ -11,3 +11,9 @@
 ^\.travis\.yml$
 ^appveyor\.yml$
 ^codecov\.yml$
+^CONTRIBUTING\.md$
+^CONTRIBUTING\.html$
+^_roxy\.R$
+^build_package\.R$
+^examples$
+^temp_wass2\.txt$

@@ -1,3 +1,4 @@
+#' @importFrom stats optim rnorm
 #' Helper: Construct Z matrix from y (upper triangular part)
 #' @noRd
 construct_Z <- function(y, d, D) {
@@ -123,20 +124,14 @@ gradient_f <- function(y, d, D) {
 #' the multivariate normal manifold. Proceedings of the GST Workshop.
 #' (Solved the geodesic equations, enabling practical computation)
 #'
+#' For detailed theory and implementation, see the included paper:
+#' \code{system.file("fisher_rao_geodesic.pdf", package = "mvndist")}
+#'
 #' @importFrom expm logm expm
 #' @export
 fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2, 
                                           n_steps = 100, tol = 1e-6) {
   p <- length(mu1)
-  
-  # Check for ill-conditioned matrices
-  cond1 <- kappa(Sigma1)
-  cond2 <- kappa(Sigma2)
-  
-  if (cond1 > 1e10 || cond2 > 1e10) {
-    warning("Ill-conditioned covariance matrix detected. Geodesic may be inaccurate.")
-    return(NULL)
-  }
   
   # Transform to canonical parameters relative to (0, I)
   U <- chol(solve(Sigma1))
@@ -146,6 +141,14 @@ fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2,
   Sigma_transformed <- U %*% Sigma2 %*% t(U)
   
   De <- solve(Sigma_transformed)
+  
+  # Check for ill-conditioned De matrix (crucial for geodesic computation)
+  cond_De <- kappa(De)
+  
+  if (cond_De > 1e10) {
+    warning(paste("Ill-conditioned De matrix detected (kappa =", round(cond_De, 2), "). Geodesic may be inaccurate."))
+    return(NULL)
+  }
   de <- De %*% mu_transformed
   
   # Univariate case
@@ -297,20 +300,20 @@ fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2,
 #' d_uni <- fisher_rao_distance(0, matrix(1), 2, matrix(4))
 #' print(d_uni)
 #'
+#' @references
+#' Skovgaard, L. T. (1984). A Riemannian geometry of the multivariate
+#' normal model. Scandinavian Journal of Statistics, 11(4), 211-223.
+#'
+#' Eriksen, P. S. (1987). Geodesics connected with the Fisher metric on
+#' the multivariate normal manifold. Proceedings of the GST Workshop.
+#'
+#' For detailed theory and implementation, see the included paper:
+#' \code{system.file("fisher_rao_geodesic.pdf", package = "mvndist")}
+#'
 #' @importFrom expm logm
 #' @export
 fisher_rao_distance <- function(mu1, Sigma1, mu2, Sigma2, 
                                  method = "BFGS", control = list()) {
-  # Check for ill-conditioned matrices
-  cond1 <- kappa(Sigma1)
-  cond2 <- kappa(Sigma2)
-  
-  if (cond1 > 1e10 || cond2 > 1e10) {
-    warning(paste("Ill-conditioned covariance matrix detected.",
-                  "Fisher-Rao distance may be inaccurate."))
-    return(NA_real_)
-  }
-  
   p <- length(mu1)
   
   # Transform to canonical parameters relative to (0, I)
@@ -321,6 +324,15 @@ fisher_rao_distance <- function(mu1, Sigma1, mu2, Sigma2,
   Sigma_transformed <- U %*% Sigma2 %*% t(U)
   
   De <- solve(Sigma_transformed)
+  
+  # Check for ill-conditioned De matrix (crucial for Fisher-Rao computation)
+  cond_De <- kappa(De)
+  
+  if (cond_De > 1e10) {
+    warning(paste("Ill-conditioned De matrix detected (kappa =", round(cond_De, 2), ").",
+                  "Fisher-Rao distance may be inaccurate."))
+    return(NA_real_)
+  }
   de <- De %*% mu_transformed
   
   # Univariate case - use exact formula

@@ -163,6 +163,14 @@ is_ood <- d > threshold
 
 - **Information Geometry**: Amari, S. (2016). *Information Geometry and Its Applications*. Springer.
 
+### Included Documentation
+
+A detailed paper on the Fisher-Rao geodesic implementation is included with the package:
+```r
+# View the paper location
+system.file("fisher_rao_geodesic.pdf", package = "mvndist")
+```
+
 ## License
 
 MIT License - see LICENSE file for details
