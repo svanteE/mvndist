@@ -1,6 +1,7 @@
 #' @importFrom stats optim rnorm
 #' Helper: Construct Z matrix from y (upper triangular part)
 #' @noRd
+ 
 construct_Z <- function(y, d, D) {
   p <- length(d)
   
@@ -24,8 +25,7 @@ construct_Z <- function(y, d, D) {
       idx <- idx + 1
     }
   }
-  
-  # Lower triangular part determined from upper
+   # Lower triangular part determined from upper
   for (i in 1:(p-1)) {
     for (j in (i+1):p) {
       Z[j, i] <- -(d[i] * d[j] + D[j] * Z[i, j]) / D[i]
@@ -194,10 +194,19 @@ fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2,
   D <- sqrt(diag(De_diag))
   d <- de_rotated / D
   
+  start_val=function(de,De){
+    phi=-de%*%t(de/De)/2
+    p=length(de)
+    if(p==2) return(phi[1,2])
+    ud=c()
+    for(i in 1:(p-1)) ud=c(ud,phi[i,(i+1):p])
+    ud
+  }
+  
   # Optimize y to minimize tr(C(y)^2)
   n_y <- p*(p-1)/2
-  y0 <- rnorm(n_y, mean = 0, sd = 0.01)
-  
+  #y0 <- rnorm(n_y, mean = 0, sd = 0.01)
+  y0 <- startval(de_rotated,eigen_De$val)  
   # Multi-restart optimization
   best_result <- list(value = Inf)
   
@@ -362,18 +371,17 @@ fisher_rao_distance <- function(mu1, Sigma1, mu2, Sigma2,
   d <- de_rotated / D
   
   # Optimize y (upper triangular part of Z)
-  n_y <- p*(p-1)/2
   
   # Better initial guess: use small random perturbations
   # This helps escape poor local minima
-  y0 <- rnorm(n_y, mean = 0, sd = 0.01)
+  y0 <- start_val(de_rotated,eigen_De$val)  
   
   # Try optimization with multiple restarts if it doesn't converge
   best_result <- list(value = Inf)
   
   for (attempt in 1:3) {
     result <- optim(
-      par = if(attempt == 1) y0 else rnorm(n_y, sd = 0.05),
+      par = if(attempt == 1) y0 else rnorm(y_0, sd = 0.05),
       fn = objective_f,
       gr = gradient_f,  # Use gradient for faster convergence
       d = d,
@@ -396,7 +404,7 @@ fisher_rao_distance <- function(mu1, Sigma1, mu2, Sigma2,
   T_mat <- construct_T(result$par, d, D)
   TtT <- t(T_mat) %*% T_mat
   A <- expm::logm(TtT)
-  distance <- sqrt(sum(A^2) / 2)
+  distance <- sqrt(sum(A%*%A) / 2)
   
   # Check convergence
   if (result$value > 1e-4) {
