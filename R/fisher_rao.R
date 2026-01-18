@@ -98,10 +98,13 @@ gradient_f <- function(y, d, D) {
 #'
 #' Computes the Fisher-Rao geodesic path between two multivariate normal distributions
 #' using the method of Eriksen (1987), which solves the geodesic equations for the
-#' Fisher information metric formulated by Skovgaard (1984). The method minimizes
-#' f(y) = tr(C(y)^2) where C(y) is the off-diagonal block in the matrix logarithm
-#' decomposition. Once optimal y is found, it constructs A(y) and computes Λ(t) = exp(t·A)
-#' to extract the geodesic path μ(t) and Σ(t).
+#' Fisher information metric formulated by Skovgaard (1984). 
+#'
+#' When the canonical parameter de is an eigenvector of the precision matrix De
+#' (which includes all univariate cases), uses the closed-form formula (7) for
+#' efficient computation. Otherwise, minimizes f(y) = tr(C(y)^2) where C(y) is the
+#' off-diagonal block in the matrix logarithm decomposition. Once optimal y is found,
+#' it constructs A(y) and computes Λ(t) = exp(t·A) to extract the geodesic path μ(t) and Σ(t).
 #'
 #' @param mu1 Mean vector of the first distribution
 #' @param Sigma1 Covariance matrix of the first distribution
@@ -151,29 +154,40 @@ fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2,
   }
   de <- De %*% mu_transformed
   
-  # Univariate case
-  if (p == 1) {
-    de_scalar <- as.numeric(de)
-    De_scalar <- as.numeric(De)
+  # Check if de is an eigenvector of De (includes univariate case p=1)
+  eigenvector_result <- fisher_rao_de_eigenvector(de, De, tol = 1e-8)
+  
+  if (eigenvector_result$is_aligned) {
+    # de is an eigenvector of De - use formula (7) for geodesic
+    # In this case, the geodesic is parametrized by a single eigenvalue
+    # and the solution is separable
     
-    sigma1 <- 1
-    sigma2 <- sqrt(1 / De_scalar)
-    mu_diff <- de_scalar / De_scalar
+    # Compute the A matrix from canonical parameters
+    Dei <- solve(De)
+    mu <- Dei %*% de
+    tau <- as.numeric(t(mu) %*% de)
+    phi <- -de %*% t(mu) / 2
+    Ga <- Dei + (1 + tau/4) * mu %*% t(mu)
+    A <- (De + Ga - phi - t(phi)) / 2
     
-    # Use exact geodesic formula for univariate case
+    # Generate geodesic path: Λ(t) = exp(t·A)
     times <- seq(0, 1, length.out = n_steps)
     
     geodesic <- lapply(times, function(t) {
-      # Interpolate mean linearly
-      mu_t <- (1 - t) * 0 + t * mu_diff
+      # Compute Λ(t) = exp(t·A)
+      Lambda_t <- expm::expm(t * A)
       
-      # Interpolate sigma on log scale (geometric mean)
-      sigma_t <- sigma1^(1-t) * sigma2^t
-      Sigma_t <- matrix(sigma_t^2, 1, 1)
+      # Extract De(t) and de(t) from Λ(t) in canonical space
+      De_t_canonical <- Lambda_t[1:p, 1:p]
+      de_t_canonical <- Lambda_t[1:p, p+1, drop=FALSE]
+      
+      # Convert (De, de) to (mu, Sigma) in canonical space
+      Sigma_t_canonical <- solve(De_t_canonical)
+      mu_t_canonical <- Sigma_t_canonical %*% de_t_canonical
       
       # Transform back to original coordinates
-      mu_original <- mu1 + U_inv %*% matrix(mu_t, ncol = 1)
-      Sigma_original <- U_inv %*% Sigma_t %*% t(U_inv)
+      mu_original <- mu1 + U_inv %*% mu_t_canonical
+      Sigma_original <- U_inv %*% Sigma_t_canonical %*% t(U_inv)
       
       list(t = t, 
            mu = as.vector(mu_original),
@@ -183,7 +197,7 @@ fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2,
     return(geodesic)
   }
   
-  # Multivariate case - use optimized method
+  # General multivariate case - de is NOT an eigenvector of De, use optimized method
   # Diagonalize De via eigendecomposition
   eigen_De <- eigen(De)
   De_diag <- diag(eigen_De$values)
@@ -206,7 +220,7 @@ fisher_rao_geodesic_numerical <- function(mu1, Sigma1, mu2, Sigma2,
   # Optimize y to minimize tr(C(y)^2)
   n_y <- p*(p-1)/2
   #y0 <- rnorm(n_y, mean = 0, sd = 0.01)
-  y0 <- startval(de_rotated,eigen_De$val)  
+  y0 <- start_val(de_rotated,eigen_De$val)  
   # Multi-restart optimization
   best_result <- list(value = Inf)
   
@@ -404,7 +418,7 @@ fisher_rao_distance <- function(mu1, Sigma1, mu2, Sigma2,
   T_mat <- construct_T(result$par, d, D)
   TtT <- t(T_mat) %*% T_mat
   A <- expm::logm(TtT)
-  distance <- sqrt(sum(A%*%A) / 2)
+  distance <- sqrt(sum(A^2)) / 2
   
   # Check convergence
   if (result$value > 1e-4) {
@@ -413,4 +427,179 @@ fisher_rao_distance <- function(mu1, Sigma1, mu2, Sigma2,
   }
   
   distance
+
 }
+
+#' Check if a vector is an eigenvector of a matrix
+#'
+#' @description
+#' Verifies whether a given vector is an eigenvector of a matrix by checking
+#' if \eqn{Av = \lambda v} for some eigenvalue \eqn{\lambda}, where \eqn{A} is
+#' the matrix and \eqn{v} is the vector.
+#'
+#' @param A A square numeric matrix.
+#' @param v A numeric vector to check as a potential eigenvector.
+#' @param tol Numeric tolerance for determining equality (default: 1e-10).
+#'
+#' @return
+#' A list containing:
+#' \item{is_eigenvector}{Logical: TRUE if v is an eigenvector of A, FALSE otherwise.}
+#' \item{eigenvalue}{Numeric: The estimated eigenvalue if v is an eigenvector, NA otherwise.}
+#' \item{residual}{Numeric: The norm of the residual Av - λv (measure of how close to being an eigenvector).}
+#'
+#' @details
+#' The function computes \eqn{A v} and compares it to \eqn{\lambda v} where \eqn{\lambda}
+#' is estimated from the Rayleigh quotient: \eqn{\lambda = \frac{v^T A v}{v^T v}}.
+#' The vector is considered an eigenvector if the residual norm is below the tolerance.
+#'
+#' @examples
+#' A <- matrix(c(1, 2, 2, 4), nrow = 2)
+#' eigendecomp <- eigen(A)
+#' v <- eigendecomp$vectors[, 1]
+#'
+#' result <- is_eigenvector(A, v)
+#' result$is_eigenvector
+#'
+#' @export
+is_eigenvector <- function(A, v, tol = 1e-10) {
+  # Input validation
+  if (!is.matrix(A)) {
+    A <- as.matrix(A)
+  }
+  if (nrow(A) != ncol(A)) {
+    stop("A must be a square matrix")
+  }
+  if (!is.numeric(v)) {
+    v <- as.numeric(v)
+  }
+  if (nrow(A) != length(v)) {
+    stop("Vector v must have the same length as the dimension of matrix A")
+  }
+  
+  # Handle zero vector
+  if (all(v == 0)) {
+    return(list(
+      is_eigenvector = TRUE,
+      eigenvalue = NA_real_,
+      residual = 0
+    ))
+  }
+  
+  # Estimate eigenvalue using Rayleigh quotient
+  Av <- A %*% v
+  lambda <- as.numeric((t(v) %*% Av) / (t(v) %*% v))
+  
+  # Compute residual: ||Av - λv||
+  residual <- norm(as.matrix(Av - lambda * v), type = "F")
+  
+  # Determine if it's an eigenvector
+  is_eigen <- residual < tol
+  
+  list(
+    is_eigenvector = is_eigen,
+    eigenvalue = lambda,
+    residual = residual
+  )
+}
+
+#' Fisher-Rao Distance (Formula 7) when de is an eigenvector of De
+#'
+#' @description
+#' Computes the Fisher-Rao distance using formula (7) when \eqn{de} is an eigenvector
+#' of the precision matrix \eqn{De}. This special case arises in canonical parameters
+#' when the mean direction aligns with the covariance structure.
+#'
+#' @param de A numeric vector of canonical mean parameter.
+#' @param De A square numeric matrix, the precision (inverse covariance) matrix.
+#' @param tol Numeric tolerance for eigenvector check (default: 1e-8).
+#'
+#' @return
+#' A list containing:
+#' \item{is_aligned}{Logical: TRUE if de is an eigenvector of De, FALSE otherwise.}
+#' \item{distance}{Numeric: The Fisher-Rao distance D_0 from formula (7) if de is aligned,
+#'                  NA otherwise.}
+#' \item{eigenvalue}{Numeric: The eigenvalue if de is an eigenvector, NA otherwise.}
+#'
+#' @details
+#' When \eqn{de} is an eigenvector of \eqn{De}, formula (7) applies:
+#' \deqn{D_0 = \sqrt{\frac{\text{tr}(G^2)}{2}}}
+#' where \eqn{G = \log(A)} and \eqn{A} is constructed from the canonical parameters
+#' as described in Fisher-Rao geodesic theory (Eriksen 1987).
+#'
+#' Specifically:
+#' - \eqn{\mu = De^{-1} de}
+#' - \eqn{\tau = \mu^T de}
+#' - \eqn{\phi = -\frac{de \mu^T}{2}}
+#' - \eqn{G_a = De^{-1} + (1 + \tau/4) \mu \mu^T}
+#' - \eqn{A = \frac{De + G_a - \phi - \phi^T}{2}}
+#'
+#' @references
+#' Eriksen, P. S. (1987). Geodesics connected with the Fisher metric on
+#' the multivariate normal manifold. Proceedings of the GST Workshop.
+#'
+#' @examples
+#' # Create a simple example where de is an eigenvector of De
+#' De <- diag(c(2, 3, 4))  # Diagonal matrix (all vectors are eigenvectors)
+#' de <- matrix(c(1, 0, 0), ncol = 1)  # Eigenvector with eigenvalue 2
+#'
+#' result <- fisher_rao_de_eigenvector(de, De)
+#' if (result$is_aligned) {
+#'   cat("D_0 (Fisher-Rao distance):", result$distance, "\n")
+#' }
+#'
+#' @importFrom expm logm
+#' @export
+fisher_rao_de_eigenvector <- function(de, De, tol = 1e-8) {
+  # Input validation
+  if (!is.matrix(De)) {
+    De <- as.matrix(De)
+  }
+  if (nrow(De) != ncol(De)) {
+    stop("De must be a square matrix (precision matrix)")
+  }
+  if (!is.numeric(de)) {
+    de <- as.numeric(de)
+  }
+  if (length(de) != nrow(De)) {
+    stop("de must have the same length as the dimension of De")
+  }
+  
+  # Ensure de is a column vector
+  if (!is.matrix(de)) {
+    de <- as.matrix(de, ncol = 1)
+  }
+  
+  # Check if de is an eigenvector of De
+  eigen_check <- is_eigenvector(De, as.vector(de), tol = tol)
+  
+  if (!eigen_check$is_eigenvector) {
+    return(list(
+      is_aligned = FALSE,
+      distance = NA_real_,
+      eigenvalue = NA_real_
+    ))
+  }
+  
+  # de is an eigenvector - compute D_0 using formula (7)
+  # Compute the A matrix from the canonical parameters
+  Dei <- solve(De)
+  mu <- Dei %*% de
+  tau <- as.numeric(t(mu) %*% de)
+  phi <- -de %*% t(mu) / 2
+  Ga <- Dei + (1 + tau/4) * mu %*% t(mu)
+  A <- (De + Ga - phi - t(phi)) / 2
+  
+  # Compute matrix logarithm
+  G <- expm::logm(A)
+  
+  # Distance is sqrt(tr(G^2)/2)
+  distance <- sqrt(sum(G^2) / 2)
+  
+  list(
+    is_aligned = TRUE,
+    distance = distance,
+    eigenvalue = eigen_check$eigenvalue
+  )
+}
+
+
